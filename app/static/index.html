@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VectorMind</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true">◆</span>VectorMind</div>
+    <div class="badges">
+      <span class="badge hl">HNSW</span>
+      <span class="badge">KD-TREE</span>
+      <span class="badge">BRUTE FORCE</span>
+      <span class="badge" id="ollama-badge">OLLAMA …</span>
+    </div>
+    <span id="stats-label" class="stats">loading…</span>
+  </header>
+
+  <div class="layout">
+    <!-- ══ LEFT: CONTROLS ═══════════════════════════════════════════ -->
+    <aside class="left">
+      <section>
+        <h3>Query (demo vectors)</h3>
+        <form id="search-form" class="stack">
+          <input id="search-q" type="text" placeholder="rocket to mars, guitar, cricket…" autocomplete="off">
+          <button type="submit" class="primary">Search</button>
+        </form>
+      </section>
+
+      <section>
+        <h3>Algorithm</h3>
+        <div class="seg" id="algo-seg">
+          <button type="button" class="on" data-algo="hnsw">HNSW</button>
+          <button type="button" data-algo="kdtree">KD-Tree</button>
+          <button type="button" data-algo="bruteforce">Brute</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>Distance metric</h3>
+        <select id="metric">
+          <option value="cosine">Cosine similarity</option>
+          <option value="euclidean">Euclidean distance</option>
+          <option value="manhattan">Manhattan distance</option>
+        </select>
+      </section>
+
+      <section>
+        <h3>Top-K: <span id="k-label">5</span></h3>
+        <input id="k" type="range" min="1" max="10" value="5">
+      </section>
+
+      <section>
+        <h3>Category legend</h3>
+        <ul class="legend" id="legend"></ul>
+      </section>
+
+      <section>
+        <h3>Insert demo vector</h3>
+        <form id="insert-form" class="stack">
+          <input id="insert-text" type="text" placeholder="Description…" required>
+          <select id="insert-cat">
+            <option value="tech">Tech</option>
+            <option value="space">Space</option>
+            <option value="music">Music</option>
+            <option value="sports">Sports</option>
+          </select>
+          <button type="submit">+ Insert</button>
+        </form>
+      </section>
+
+      <section>
+        <h3>Benchmark</h3>
+        <button type="button" id="bench-btn">▶ Compare all algorithms</button>
+      </section>
+
+      <div id="left-error" class="error" hidden></div>
+    </aside>
+
+    <!-- ══ CENTER: SCATTER PLOT ═════════════════════════════════════ -->
+    <main class="center">
+      <canvas id="plot" aria-label="2D PCA projection of the vectors"></canvas>
+      <div id="tooltip" class="tooltip" hidden></div>
+    </main>
+
+    <!-- ══ RIGHT: TABS ══════════════════════════════════════════════ -->
+    <aside class="right">
+      <nav class="tabs" role="tablist">
+        <button class="tab on" data-tab="search" role="tab">Search</button>
+        <button class="tab" data-tab="docs" role="tab">Documents</button>
+        <button class="tab" data-tab="ask" role="tab">Ask AI</button>
+      </nav>
+
+      <!-- TAB: SEARCH -->
+      <div class="tab-body on" id="tab-search">
+        <section>
+          <h3>Search latency</h3>
+          <div class="lat-big" id="lat-big">—</div>
+          <div class="muted small" id="lat-sub">No query yet</div>
+        </section>
+        <section>
+          <h3>Top matches</h3>
+          <div id="results" class="results"><p class="muted small">Run a search to see results…</p></div>
+        </section>
+        <section>
+          <h3>Query embedding (16D)</h3>
+          <canvas id="vec-chart" class="vec-chart"></canvas>
+        </section>
+        <section id="bench-sec" hidden>
+          <h3>Algorithm comparison</h3>
+          <div id="bench-bars" class="bars"></div>
+          <p class="muted small" id="bench-meta"></p>
+        </section>
+        <section>
+          <h3>HNSW graph layers <span class="muted mono small" id="hnsw-params"></span></h3>
+          <div id="layers" class="bars"><p class="muted small">Loading…</p></div>
+        </section>
+      </div>
+
+      <!-- TAB: DOCUMENTS -->
+      <div class="tab-body" id="tab-docs">
+        <section>
+          <h3>Ollama status</h3>
+          <div id="ollama-status" class="status-box">Checking…</div>
+        </section>
+        <section>
+          <h3>Insert document</h3>
+          <form id="doc-form" class="stack">
+            <input id="doc-title" type="text" placeholder="Document title / topic…" required>
+            <textarea id="doc-text" rows="9" required placeholder="Paste your notes, a textbook excerpt, lecture content…&#10;&#10;Long text is split into overlapping chunks, and each chunk gets its own real embedding from nomic-embed-text."></textarea>
+            <button type="submit" class="primary" id="doc-btn">Embed &amp; insert</button>
+            <div id="doc-status" class="small"></div>
+          </form>
+        </section>
+        <section>
+          <h3>Stored documents (<span id="doc-count">0</span>)</h3>
+          <div id="doc-list" class="doc-list"><p class="muted small">No documents yet. Insert some above.</p></div>
+        </section>
+      </div>
+
+      <!-- TAB: ASK AI -->
+      <div class="tab-body" id="tab-ask">
+        <section>
+          <h3>Ask a question</h3>
+          <form id="ask-form" class="stack">
+            <textarea id="ask-q" rows="3" placeholder="What are the conditions for a deadlock?"></textarea>
+            <div class="row">
+              <select id="ask-k">
+                <option value="2">Top 2</option>
+                <option value="3" selected>Top 3</option>
+                <option value="5">Top 5</option>
+              </select>
+              <button type="submit" class="primary grow" id="ask-btn">Ask AI</button>
+            </div>
+            <p class="muted small">Uses your inserted documents as context. Answers come from the local LLM. Ctrl/⌘ + Enter to send.</p>
+          </form>
+        </section>
+        <section>
+          <h3>Conversation</h3>
+          <div id="chat" class="chat"><p class="muted small">Ask a question about your inserted documents…</p></div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
